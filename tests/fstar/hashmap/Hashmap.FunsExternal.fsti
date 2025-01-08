@@ -18,6 +18,6 @@ val utils_serialize : hashMap_t u64 -> state -> result (state & unit)
     Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43
     Name pattern: core::clone::Clone::clone_from *)
 val core_clone_Clone_clone_from
-  (#self : Type0) (self_clause : core_clone_Clone self) :
+  (#self : Type0) (cloneInst : core_clone_Clone self) :
   self -> self -> state -> result (state & self)
 

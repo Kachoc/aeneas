@@ -505,51 +505,63 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
              true
          ]}
       *)
-      (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id) ->
-          (* We have to check whether the trait method is required or provided *)
-          let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
-          let trait_decl =
-            TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
-          in
-          let method_id =
-            PureUtils.trait_decl_get_method trait_decl method_name
-          in
+      let generics =
+        match fun_id with
+        | FromLlbc (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id)
+          ->
+            (* We have to check whether the trait method is required or provided *)
+            let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
+            let trait_decl =
+              TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
+            in
+            let bound_method =
+              PureUtils.trait_decl_get_method trait_decl method_name
+            in
 
-          if not method_id.is_provided then (
-            (* Required method *)
-            sanity_check __FILE__ __LINE__ (lp_id = None)
-              trait_decl.item_meta.span;
-            extract_trait_ref trait_decl.item_meta.span ctx fmt
-              TypeDeclId.Set.empty true trait_ref;
-            let fun_name =
-              ctx_get_trait_method span trait_ref.trait_decl_ref.trait_decl_id
-                method_name ctx
-            in
-            let add_brackets (s : string) =
-              if backend () = Coq then "(" ^ s ^ ")" else s
-            in
-            F.pp_print_string fmt ("." ^ add_brackets fun_name))
-          else
-            (* Provided method: we see it as a regular function call, and use
-               the function name *)
-            let fun_id = FromLlbc (FunId (FRegular method_id.id), lp_id) in
-            let fun_name =
-              ctx_get_function trait_decl.item_meta.span fun_id ctx
-            in
+            if not bound_method.is_provided then begin
+              (* Required method *)
+              sanity_check __FILE__ __LINE__ (lp_id = None)
+                trait_decl.item_meta.span;
+              extract_trait_ref trait_decl.item_meta.span ctx fmt
+                TypeDeclId.Set.empty true trait_ref;
+              let fun_name =
+                ctx_get_trait_method span trait_ref.trait_decl_ref.trait_decl_id
+                  method_name ctx
+              in
+              let add_brackets (s : string) =
+                if backend () = Coq then "(" ^ s ^ ")" else s
+              in
+              F.pp_print_string fmt ("." ^ add_brackets fun_name);
+              generics
+            end
+            else begin
+              (* Provided method: we see it as a regular function call, and use
+                 the function name. `generics` is generics for the method only;
+                 we must substitute the bound method to get the correct
+                 generics for the function item. *)
+              let subst =
+                make_subst_from_generics_including_methods trait_decl.generics
+                  bound_method.bound_method.binder_generics trait_ref.trait_id
+                  trait_ref.trait_decl_ref.decl_generics generics
+              in
+              let fn_ref =
+                subst_visitor#visit_fun_decl_ref subst
+                  bound_method.bound_method.binder_value
+              in
+              let fun_id = FromLlbc (FunId (FRegular fn_ref.fun_id), lp_id) in
+              let fun_name =
+                ctx_get_function trait_decl.item_meta.span fun_id ctx
+              in
+              F.pp_print_string fmt fun_name;
+
+              (* Return the newly-computed function item generics. *)
+              fn_ref.fun_generics
+            end
+        | _ ->
+            let fun_name = ctx_get_function span fun_id ctx in
             F.pp_print_string fmt fun_name;
-
-            (* Note that we do not need to print the generics for the trait
-               declaration: they are always implicit as they can be deduced
-               from the trait self clause.
-
-               Print the trait ref (to instantate the self clause) *)
-            F.pp_print_space fmt ();
-            extract_trait_ref trait_decl.item_meta.span ctx fmt
-              TypeDeclId.Set.empty true trait_ref
-      | _ ->
-          let fun_name = ctx_get_function span fun_id ctx in
-          F.pp_print_string fmt fun_name);
+            generics
+      in
 
       (* Sanity check: HOL4 doesn't support const generics *)
       sanity_check __FILE__ __LINE__
@@ -1296,21 +1308,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
      About the order: we want to make sure the names are reserved for
      those (variable names might collide with them but it is ok, we will add
      suffixes to the variables).
-
-     TODO: micro-pass to update what happens when calling trait provided
-     functions.
   *)
-  let ctx, trait_decl =
-    match def.kind with
-    | TraitDeclItem (trait_ref, _, true) ->
-        let trait_decl =
-          T.TraitDeclId.Map.find trait_ref.trait_decl_id ctx.trans_trait_decls
-        in
-        let ctx, _ = ctx_add_trait_self_clause def.item_meta.span ctx in
-        let ctx = { ctx with is_provided_method = true } in
-        (ctx, Some trait_decl)
-    | _ -> (ctx, None)
-  in
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
@@ -1323,8 +1321,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let explicit = def.signature.explicit_info in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     ~trait_decl Item def.signature.generics (Some explicit) type_params
-     cg_params trait_clauses);
+     Item def.signature.generics (Some explicit) type_params cg_params
+     trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
