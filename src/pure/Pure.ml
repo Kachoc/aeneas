@@ -200,9 +200,6 @@ class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
     inherit! [_] T.iter_const_generic
-
-    method visit_trait_item_name : 'env -> trait_item_name -> unit =
-      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -210,30 +207,20 @@ class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
     inherit! [_] T.map_const_generic
-
-    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
-      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_ty_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] reduce_type_id
     inherit! [_] T.reduce_const_generic
-
-    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
-      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_ty_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] mapreduce_type_id
     inherit! [_] T.mapreduce_const_generic
-
-    method visit_trait_item_name
-        : 'env -> trait_item_name -> trait_item_name * 'a =
-      fun _ x -> (x, self#zero)
   end
 
 type ty =
@@ -343,6 +330,9 @@ class ['self] iter_type_decl_base =
         self#visit_literal_type e var.ty
 
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [type_decl] *)
@@ -367,6 +357,9 @@ class ['self] map_type_decl_base =
         }
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [type_decl] *)
@@ -388,6 +381,9 @@ class virtual ['self] reduce_type_decl_base =
         self#plus (self#plus x0 x1) x2
 
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [type_decl] *)
@@ -410,6 +406,10 @@ class virtual ['self] mapreduce_type_decl_base =
         ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_item_name
+        : 'env -> trait_item_name -> trait_item_name * 'a =
       fun _ x -> (x, self#zero)
   end
 

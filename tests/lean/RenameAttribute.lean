@@ -27,8 +27,7 @@ def BoolImpl : BoolTest Bool := {
 
 /- [rename_attribute::BoolTrait::ret_true]:
    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
-def BoolTrait.retTest
-  {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
+def BoolTrait.retTest {Self : Type} (self : Self) : Result Bool :=
   Result.ok true
 
 /- [rename_attribute::test_bool_trait]:
@@ -37,7 +36,7 @@ def BoolFn (T : Type) (x : Bool) : Result Bool :=
   do
   let b ← BoolTraitBool.getTest x
   if b
-  then BoolTrait.retTest BoolImpl x
+  then BoolTrait.retTest x
   else Result.ok false
 
 /- [rename_attribute::SimpleEnum]

@@ -152,32 +152,68 @@ let empty_generic_args : generic_args =
 let mk_generic_args_from_types (types : ty list) : generic_args =
   { types; const_generics = []; trait_refs = [] }
 
+(** Generics can be bound in two places: each item has its generics, and
+    additionally within a trait decl or impl each method has its own generics
+    (using `binder` above). We distinguish these two cases here. In charon, the
+    distinction is made thanks to `de_bruijn_var`.
+    Note that for the generics of a top-level `fun_decl` we always use `Item`;
+    `Method` only refers to the inner binder found in the list of methods in a
+    trait_decl/trait_impl.
+    *)
+type generic_origin = Item | Method [@@deriving show, ord]
+
+(** Charon supports several levels of nested binders; however there are
+    currently only two cases where we bind non-lifetime variables: at the
+    top-level of each item, and for each method inside a trait_decl/trait_impl.
+    Moreover, we use `Free` vars to identify item-bound vars. This means that
+    we can identify which binder a variable comes from without rigorously
+    tracking binder levels, which is what this function does.
+    Note that the `de_bruijn_id`s are wrong anyway because we kept charon's
+    binding levels but forgot all the region binders.
+  *)
+let origin_from_de_bruijn_var (var : 'a de_bruijn_var) : generic_origin * 'a =
+  match var with
+  | Bound (_, id) -> (Method, id)
+  | Free id -> (Item, id)
+
 type subst = {
   ty_subst : TypeVarId.id -> ty;
   cg_subst : ConstGenericVarId.id -> const_generic;
   tr_subst : TraitClauseId.id -> trait_instance_id;
+  method_ty_subst : TypeVarId.id -> ty;
+  method_cg_subst : ConstGenericVarId.id -> const_generic;
+  method_tr_subst : TraitClauseId.id -> trait_instance_id;
   tr_self : trait_instance_id;
 }
 
+let subst_visitor =
+  object
+    inherit [_] map_ty
+
+    method! visit_TVar subst var =
+      let origin, id = origin_from_de_bruijn_var var in
+      match origin with
+      | Item -> subst.ty_subst id
+      | Method -> subst.method_ty_subst id
+
+    method! visit_CgVar subst var =
+      let origin, id = origin_from_de_bruijn_var var in
+      match origin with
+      | Item -> subst.cg_subst id
+      | Method -> subst.method_cg_subst id
+
+    method! visit_Clause subst var =
+      let origin, id = origin_from_de_bruijn_var var in
+      match origin with
+      | Item -> subst.tr_subst id
+      | Method -> subst.method_tr_subst id
+
+    method! visit_Self subst = subst.tr_self
+  end
+
 (** Type substitution *)
 let ty_substitute (subst : subst) (ty : ty) : ty =
-  let obj =
-    object
-      inherit [_] map_ty
-
-      method! visit_TVar _ var =
-        subst.ty_subst (Substitute.expect_free_var None var)
-
-      method! visit_CgVar _ var =
-        subst.cg_subst (Substitute.expect_free_var None var)
-
-      method! visit_Clause _ var =
-        subst.tr_subst (Substitute.expect_free_var None var)
-
-      method! visit_Self _ = subst.tr_self
-    end
-  in
-  obj#visit_ty () ty
+  subst_visitor#visit_ty subst ty
 
 let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
     =
@@ -195,6 +231,54 @@ let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
   let refs = List.map (fun (x : trait_ref) -> x.trait_id) refs in
   let mp = TraitClauseId.Map.of_list (List.combine clauses refs) in
   fun id -> TraitClauseId.Map.find id mp
+
+let make_subst_from_generics (params : generic_params) (args : generic_args) :
+    subst =
+  let ty_subst = make_type_subst params.types args.types in
+  let cg_subst =
+    make_const_generic_subst params.const_generics args.const_generics
+  in
+  let tr_subst = make_trait_subst params.trait_clauses args.trait_refs in
+  let err _ =
+    craise_opt_span __FILE__ __LINE__ None "Found unexpected bound variable"
+  in
+  {
+    ty_subst;
+    cg_subst;
+    tr_subst;
+    method_ty_subst = err;
+    method_cg_subst = err;
+    method_tr_subst = err;
+    tr_self = Self;
+  }
+
+let make_subst_from_generics_including_methods (item_params : generic_params)
+    (method_params : generic_params) (tr_self : trait_instance_id)
+    (item_args : generic_args) (method_args : generic_args) : subst =
+  let ty_subst = make_type_subst item_params.types item_args.types in
+  let cg_subst =
+    make_const_generic_subst item_params.const_generics item_args.const_generics
+  in
+  let tr_subst =
+    make_trait_subst item_params.trait_clauses item_args.trait_refs
+  in
+  let method_ty_subst = make_type_subst method_params.types method_args.types in
+  let method_cg_subst =
+    make_const_generic_subst method_params.const_generics
+      method_args.const_generics
+  in
+  let method_tr_subst =
+    make_trait_subst method_params.trait_clauses method_args.trait_refs
+  in
+  {
+    ty_subst;
+    cg_subst;
+    tr_subst;
+    method_ty_subst;
+    method_cg_subst;
+    method_tr_subst;
+    tr_self;
+  }
 
 (** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.
 
@@ -217,15 +301,6 @@ let type_decl_get_fields (def : type_decl)
              an enumeration:\n\
              - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
           ^ opt_variant_id))
-
-let make_subst_from_generics (params : generic_params) (args : generic_args) :
-    subst =
-  let ty_subst = make_type_subst params.types args.types in
-  let cg_subst =
-    make_const_generic_subst params.const_generics args.const_generics
-  in
-  let tr_subst = make_trait_subst params.trait_clauses args.trait_refs in
-  { ty_subst; cg_subst; tr_subst; tr_self = Self }
 
 (** Instantiate the type variables for the chosen variant in an ADT definition,
     and return the list of the types of its fields *)
@@ -785,23 +860,25 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
   | None -> None
   | Some e -> Some { e; ty = pat.ty }
 
-type trait_decl_method_decl_id = { is_provided : bool; id : fun_decl_id }
+type trait_decl_method = {
+  is_provided : bool;
+  bound_method : fun_decl_ref binder;
+}
 
 let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
-    trait_decl_method_decl_id =
+    trait_decl_method =
   (* First look in the required methods *)
   let bound_method =
     List.find_opt (fun (s, _) -> s = method_name) trait_decl.required_methods
   in
   match bound_method with
-  | Some (_, bound_method) ->
-      { is_provided = false; id = bound_method.binder_value.fun_id }
+  | Some (_, bound_method) -> { is_provided = false; bound_method }
   | None ->
       (* Must be a provided method *)
       let _, bound_method =
         List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
       in
-      { is_provided = true; id = bound_method.binder_value.fun_id }
+      { is_provided = true; bound_method }
 
 let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {

@@ -30,16 +30,14 @@ Definition BoolImpl : BoolTest_t bool := {|
 
 (** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
-Definition boolTrait_retTest
-  {Self : Type} (self_clause : BoolTest_t Self) (self : Self) : result bool :=
+Definition boolTrait_retTest {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
-  b <- boolTraitBool_getTest x;
-  if b then boolTrait_retTest BoolImpl x else Ok false
+  b <- boolTraitBool_getTest x; if b then boolTrait_retTest x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]

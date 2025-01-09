@@ -18,17 +18,14 @@ let boolImpl : boolTest_t bool = { getTest = boolTraitBool_getTest; }
 
 (** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
-let boolTrait_retTest
-  (#self : Type0) (self_clause : boolTest_t self) (self1 : self) :
-  result bool
-  =
+let boolTrait_retTest (#self : Type0) (self1 : self) : result bool =
   Ok true
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 *)
 let boolFn (t : Type0) (x : bool) : result bool =
   let* b = boolTraitBool_getTest x in
-  if b then boolTrait_retTest boolImpl x else Ok false
+  if b then boolTrait_retTest x else Ok false
 
 (** [rename_attribute::C]
     Source: 'tests/src/rename_attribute.rs', lines 50:0-50:28 *)

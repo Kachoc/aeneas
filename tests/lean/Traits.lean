@@ -27,8 +27,7 @@ def BoolTraitBool : BoolTrait Bool := {
 
 /- [traits::BoolTrait::ret_true]:
    Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
-def BoolTrait.ret_true
-  {Self : Type} (self_clause : BoolTrait Self) (self : Self) : Result Bool :=
+def BoolTrait.ret_true {Self : Type} (self : Self) : Result Bool :=
   Result.ok true
 
 /- [traits::test_bool_trait_bool]:
@@ -37,7 +36,7 @@ def test_bool_trait_bool (x : Bool) : Result Bool :=
   do
   let b ← BoolTraitBool.get_bool x
   if b
-  then BoolTrait.ret_true BoolTraitBool x
+  then BoolTrait.ret_true x
   else Result.ok false
 
 /- [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
@@ -60,7 +59,7 @@ def test_bool_trait_option {T : Type} (x : Option T) : Result Bool :=
   do
   let b ← BoolTraitOption.get_bool x
   if b
-  then BoolTrait.ret_true (BoolTraitOption T) x
+  then BoolTrait.ret_true x
   else Result.ok false
 
 /- [traits::test_bool_trait]:

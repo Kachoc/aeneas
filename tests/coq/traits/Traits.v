@@ -30,16 +30,14 @@ Definition BoolTraitBool : BoolTrait_t bool := {|
 
 (** [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-Definition boolTrait_ret_true
-  {Self : Type} (self_clause : BoolTrait_t Self) (self : Self) : result bool :=
+Definition boolTrait_ret_true {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 
 (** [traits::test_bool_trait_bool]:
     Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
 Definition test_bool_trait_bool (x : bool) : result bool :=
-  b <- boolTraitBool_get_bool x;
-  if b then boolTrait_ret_true BoolTraitBool x else Ok false
+  b <- boolTraitBool_get_bool x; if b then boolTrait_ret_true x else Ok false
 .
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
@@ -58,8 +56,7 @@ Definition BoolTraitOption (T : Type) : BoolTrait_t (option T) := {|
 (** [traits::test_bool_trait_option]:
     Source: 'tests/src/traits.rs', lines 33:0-35:1 *)
 Definition test_bool_trait_option {T : Type} (x : option T) : result bool :=
-  b <- boolTraitOption_get_bool x;
-  if b then boolTrait_ret_true (BoolTraitOption T) x else Ok false
+  b <- boolTraitOption_get_bool x; if b then boolTrait_ret_true x else Ok false
 .
 
 (** [traits::test_bool_trait]:

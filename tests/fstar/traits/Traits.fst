@@ -20,17 +20,14 @@ let boolTraitBool : boolTrait_t bool = { get_bool = boolTraitBool_get_bool; }
 
 (** [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-let boolTrait_ret_true
-  (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :
-  result bool
-  =
+let boolTrait_ret_true (#self : Type0) (self1 : self) : result bool =
   Ok true
 
 (** [traits::test_bool_trait_bool]:
     Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
 let test_bool_trait_bool (x : bool) : result bool =
   let* b = boolTraitBool_get_bool x in
-  if b then boolTrait_ret_true boolTraitBool x else Ok false
+  if b then boolTrait_ret_true x else Ok false
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
     Source: 'tests/src/traits.rs', lines 25:4-30:5 *)
@@ -47,7 +44,7 @@ let boolTraitOption (t : Type0) : boolTrait_t (option t) = {
     Source: 'tests/src/traits.rs', lines 33:0-35:1 *)
 let test_bool_trait_option (#t : Type0) (x : option t) : result bool =
   let* b = boolTraitOption_get_bool x in
-  if b then boolTrait_ret_true (boolTraitOption t) x else Ok false
+  if b then boolTrait_ret_true x else Ok false
 
 (** [traits::test_bool_trait]:
     Source: 'tests/src/traits.rs', lines 37:0-39:1 *)
